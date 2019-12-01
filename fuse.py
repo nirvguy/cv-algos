@@ -42,8 +42,12 @@ def compute_weights(imgs, w=np.ones(3)):
     masks = masks/masks.sum(axis=0)
     return masks
 
-def get_final_pyramid(imgs, masks):
+def get_final_pyramid(imgs, masks, l=None):
     l_max = math.floor(math.log2(np.min(masks[0].shape)))
+    if l is not None and (l > l_max or l < 1):
+        raise Exception("Invalid l_max parameter. Must lay between [1, {}]. Got: {}".format(l_max, l))
+    elif l is not None:
+        l_max = l
     levels = [None]*(l_max+1)
 
     for i, (im, mask) in enumerate(zip(imgs, masks)):
@@ -64,7 +68,7 @@ def melt_pyramid(levels):
         final_img = level + cv2.pyrUp(final_img, dstsize=target_shape)
     return final_img
 
-def fuse(files, w=np.ones(3)):
+def fuse(files, w=np.ones(3), l_max=None):
     def iter_imgs():
         for f in files:
             im = cv2.imread(f)
@@ -72,7 +76,7 @@ def fuse(files, w=np.ones(3)):
             yield im
 
     masks = compute_weights(iter_imgs(), w=w)
-    pyramid = get_final_pyramid(iter_imgs(), masks)
+    pyramid = get_final_pyramid(iter_imgs(), masks, l=l_max)
     final_img = melt_pyramid(pyramid)
     return final_img
 
@@ -82,9 +86,10 @@ def main():
     parser.add_argument('--w-c', type=float, default=1)
     parser.add_argument('--w-s', type=float, default=1)
     parser.add_argument('--w-e', type=float, default=1)
+    parser.add_argument('--l-max', type=int)
     parser.add_argument('file', type=str, nargs='+')
     args = parser.parse_args()
-    final_img = fuse(args.file, w=(args.w_c, args.w_s, args.w_e))
+    final_img = fuse(args.file, w=(args.w_c, args.w_s, args.w_e), l_max=args.l_max)
     final_img = final_img.clip(0, 1) * 255
     cv2.imwrite(args.output, final_img)
     return
