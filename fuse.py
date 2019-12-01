@@ -68,6 +68,16 @@ def melt_pyramid(levels):
         final_img = level + cv2.pyrUp(final_img, dstsize=target_shape)
     return final_img
 
+def robust_normalization(img, s_white=0.1):
+    ch_max = np.max(img, axis=2)
+    ch_min = np.min(img, axis=2)
+    n = ch_max.size
+    s_max = np.sort(ch_max.flatten())
+    s_min = np.sort(ch_min.flatten())
+    v_max = s_max[math.ceil((1-s_white) * n - 1)]
+    v_min = s_min[math.floor(s_white * n)]
+    return (np.clip((img - v_min)/(v_max - v_min), 0, 1) * 255).astype(np.uint8)
+
 def fuse(files, w=np.ones(3), l_max=None):
     def iter_imgs():
         for f in files:
@@ -86,11 +96,16 @@ def main():
     parser.add_argument('--w-c', type=float, default=1)
     parser.add_argument('--w-s', type=float, default=1)
     parser.add_argument('--w-e', type=float, default=1)
+    parser.add_argument('--s-white', type=float, default=0.08)
     parser.add_argument('--l-max', type=int)
+    parser.add_argument('--normalization', type=str, default='robust', choices=('robust', 'clipping'))
     parser.add_argument('file', type=str, nargs='+')
     args = parser.parse_args()
     final_img = fuse(args.file, w=(args.w_c, args.w_s, args.w_e), l_max=args.l_max)
-    final_img = final_img.clip(0, 1) * 255
+    if args.normalization == 'robust':
+        final_img = robust_normalization(final_img, s_white=args.s_white)
+    else:
+        final_img = final_img.clip(0, 1) * 255
     cv2.imwrite(args.output, final_img)
     return
 
